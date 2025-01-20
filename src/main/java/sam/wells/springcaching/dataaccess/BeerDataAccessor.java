@@ -1,5 +1,8 @@
 package sam.wells.springcaching.dataaccess;
 
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Component;
 import sam.wells.springcaching.model.Beer;
 
@@ -11,9 +14,12 @@ import java.util.UUID;
 @Component
 public class BeerDataAccessor implements IBeerDataAccessor {
     private final Map<UUID, Beer> pretendExternalBeerService;
+    private final Cache beerCache;
 
-    public BeerDataAccessor() {
+    public BeerDataAccessor(final CacheManager cacheManager) {
         this.pretendExternalBeerService = new HashMap<>();
+        this.beerCache = cacheManager.getCache("beerCache");
+
         pretendExternalBeerService.put(UUID.fromString("2665a16c-387c-4cfc-9dc1-03c802cc71d2"), new Beer(UUID.fromString("2665a16c-387c-4cfc-9dc1-03c802cc71d2"), "Fat Tug", 5.0));
         pretendExternalBeerService.put(UUID.fromString("1ec5f69a-7dfd-4134-aa82-b27a386d4250"), new Beer(UUID.fromString("1ec5f69a-7dfd-4134-aa82-b27a386d4250"), "Stinky Skunk", 10.0));
         pretendExternalBeerService.put(UUID.fromString("f434e035-8c10-4086-ad25-526b2d1a485b"), new Beer(UUID.fromString("f434e035-8c10-4086-ad25-526b2d1a485b"), "Literal piss", 0.5));
@@ -22,8 +28,11 @@ public class BeerDataAccessor implements IBeerDataAccessor {
     }
 
     @Override
+    @Cacheable("beerCache")
     public Beer getBeer(final UUID id) {
         if (!pretendExternalBeerService.containsKey(id)) throw new BeerNotFoundException(id);
+
+        System.out.printf("Fetched Beer %s as it was missing from the cache\n", id);
 
         return pretendExternalBeerService.get(id);
     }
@@ -34,10 +43,14 @@ public class BeerDataAccessor implements IBeerDataAccessor {
     }
 
     @Override
-    public Beer addBeer(Beer beer) {
+    public Beer addBeer(final Beer beer) {
         // TODO: Existence checks + handles
         var id = UUID.randomUUID();
-        pretendExternalBeerService.put(id, new Beer(id, beer.name(), beer.percentage()));
+        var newBeer = new Beer(id, beer.name(), beer.percentage());
+        pretendExternalBeerService.put(id, newBeer);
+
+        beerCache.put(id, newBeer);
+        System.out.printf("Cached value for new Beer: %s\n", id);
 
         return pretendExternalBeerService.get(id);
     }
